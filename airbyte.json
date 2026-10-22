@@ -1,0 +1,1288 @@
+{
+  "info": {
+    "_postman_id": "bb819fc1-bf13-458d-94d6-4262b0945614",
+    "name": "Airbyte Wrapper API - Workspace + GCP, S3, SFTP, HTTPS Sources",
+    "description": "Provisioning creates only the workspace and PostgreSQL destination. Create each source separately in the Sources folder. GCP, S3, SFTP, and HTTPS/HTTP API configurations are editable blank templates; verify connector definition names and configuration keys against your Airbyte instance. Provision test logs a sanitized response without connection_checks_performed and connection_checked; Postman cannot remove fields from the server response itself.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "59087796",
+    "_collection_link": "https://go.postman.co/collection/59087796-bb819fc1-bf13-458d-94d6-4262b0945614?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "0. Health (no token)",
+      "item": [
+        {
+          "name": "Liveness",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"status ok\", () => pm.expect(pm.response.json().status).to.eql(\"ok\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{host}}/health/live",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness (Airbyte reachable)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Airbyte reachable\", () => pm.expect(pm.response.json().airbyte_reachable).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{host}}/health/ready",
+              "host": [
+                "{{host}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": "200 only when the wrapper can reach Airbyte; 503 with status=degraded otherwise."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "1. Provisioning",
+      "item": [
+        {
+          "name": "Provision client (workspace + destination only)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('Has workspace_id and destination_id', () => { pm.expect(j.workspace_id).to.be.a('string'); pm.expect(j.destination_id).to.be.a('string'); });",
+                  "pm.test('Workspace is named cq_<client>_workspace', () => pm.expect(j.workspace_name).to.match(/^cq_.+_workspace$/));",
+                  "pm.collectionVariables.set('workspaceId', j.workspace_id);",
+                  "pm.collectionVariables.set('destinationId', j.destination_id);",
+                  "const sanitized = {...j}; delete sanitized.connection_checks_performed; delete sanitized.connection_checked; console.log('Sanitized provisioning response:', JSON.stringify(sanitized));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"db_host\": \"{{dbHost}}\",\n  \"db_port\": {{dbPort}},\n  \"db_name\": \"{{dbName}}\",\n  \"db_user\": \"{{dbUser}}\",\n  \"db_password\": \"{{dbPassword}}\",\n  \"db_ssl_mode\": \"{{dbSslMode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/clients/{{clientId}}/provision",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients",
+                "{{clientId}}",
+                "provision"
+              ]
+            },
+            "description": "Creates only the workspace and PostgreSQL destination. Sources are created separately using the requests in the Sources folder."
+          },
+          "response": []
+        },
+        {
+          "name": "Provision same client again (expect 409; no sources in request)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Error code is ALREADY_EXISTS\", () => pm.expect(pm.response.json().error).to.eql(\"ALREADY_EXISTS\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"db_host\": \"{{dbHost}}\",\n  \"db_port\": {{dbPort}},\n  \"db_name\": \"{{dbName}}\",\n  \"db_user\": \"{{dbUser}}\",\n  \"db_password\": \"{{dbPassword}}\",\n  \"db_ssl_mode\": \"{{dbSslMode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/clients/{{clientId}}/provision",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients",
+                "{{clientId}}",
+                "provision"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Connector definitions",
+      "item": [
+        {
+          "name": "List source connectors",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const defs = pm.response.json().source_definitions;",
+                  "pm.test(\"List is not empty\", () => pm.expect(defs.length).to.be.above(0));",
+                  "const faker = defs.find(d => d.name === \"Sample Data (Faker)\");",
+                  "pm.test(\"Faker connector is available\", () => pm.expect(faker).to.exist);",
+                  "if (faker) pm.collectionVariables.set(\"fakerDefinitionId\", faker.source_definition_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/source-definitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "source-definitions"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Sources",
+      "item": [
+        {
+          "name": "Create GCP Cloud Storage source",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('source_id returned', () => pm.expect(j.source_id).to.be.a('string'));",
+                  "pm.collectionVariables.set('gcpSourceId', j.source_id);",
+                  "console.log('Created source:', j.name, j.source_id, j.status);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_definition_id\": \"{{gcpSourceDefinitionId}}\",\n  \"name\": \"GCP Cloud Storage source\",\n  \"connection_configuration\": {\n    \"project_id\": \"\",\n    \"bucket\": \"\",\n    \"service_account_json\": \"\",\n    \"path_pattern\": \"\",\n    \"format\": \"\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "sources"
+              ]
+            },
+            "description": "Creates a GCP/Google Cloud Storage source separately from workspace provisioning. Blank editable placeholders; confirm exact connector configuration keys for your Airbyte connector."
+          },
+          "response": []
+        },
+        {
+          "name": "Create AWS S3 source",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('source_id returned', () => pm.expect(j.source_id).to.be.a('string'));",
+                  "pm.collectionVariables.set('s3SourceId', j.source_id);",
+                  "console.log('Created source:', j.name, j.source_id, j.status);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_definition_id\": \"{{s3SourceDefinitionId}}\",\n  \"name\": \"AWS S3 source\",\n  \"connection_configuration\": {\n    \"bucket\": \"\",\n    \"aws_access_key_id\": \"\",\n    \"aws_secret_access_key\": \"\",\n    \"region\": \"\",\n    \"path_prefix\": \"\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "sources"
+              ]
+            },
+            "description": "Creates an Amazon S3 source separately. Blank editable placeholders; confirm connector-specific authentication fields and config schema."
+          },
+          "response": []
+        },
+        {
+          "name": "Create SFTP source",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('source_id returned', () => pm.expect(j.source_id).to.be.a('string'));",
+                  "pm.collectionVariables.set('sftpSourceId', j.source_id);",
+                  "console.log('Created source:', j.name, j.source_id, j.status);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_definition_id\": \"{{sftpSourceDefinitionId}}\",\n  \"name\": \"SFTP source\",\n  \"connection_configuration\": {\n    \"host\": \"\",\n    \"port\": \"\",\n    \"username\": \"\",\n    \"password\": \"\",\n    \"private_key\": \"\",\n    \"folder_path\": \"\",\n    \"file_pattern\": \"\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "sources"
+              ]
+            },
+            "description": "Creates an SFTP source separately. Blank editable placeholders; confirm connector-specific auth fields and config schema."
+          },
+          "response": []
+        },
+        {
+          "name": "Create HTTPS source",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('source_id returned', () => pm.expect(j.source_id).to.be.a('string'));",
+                  "pm.collectionVariables.set('httpsSourceId', j.source_id);",
+                  "console.log('Created source:', j.name, j.source_id, j.status);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_definition_id\": \"{{httpsSourceDefinitionId}}\",\n  \"name\": \"HTTPS source\",\n  \"connection_configuration\": {\n    \"url\": \"\",\n    \"http_method\": \"GET\",\n    \"authentication\": \"\",\n    \"headers\": [],\n    \"query_parameters\": [],\n    \"path\": \"\",\n    \"format\": \"\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "sources"
+              ]
+            },
+            "description": "Creates an HTTPS/HTTP API source separately. This is a generic editable template; the exact configuration fields depend on which HTTP/HTTPS connector is installed in Airbyte."
+          },
+          "response": []
+        },
+        {
+          "name": "Create source (local CSV)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) { const j = pm.response.json(); pm.collectionVariables.set('extraSourceId', j.source_id); pm.test('Source is active', () => pm.expect(j.status).to.eql('active')); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_definition_id\": \"778daa7c-feaf-4db6-96f3-70fd645acc77\",\n  \"name\": \"Second Sample Data feed\",\n  \"connection_configuration\": {\n    \"dataset_name\": \"data\",\n    \"format\": \"csv\",\n    \"url\": \"/local/data.csv\",\n    \"provider\": {\"storage\": \"local\"},\n    \"reader_options\": \"{}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "sources"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Test source connection (use selected source ID)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Check succeeded\", () => pm.expect(pm.response.json().status).to.eql(\"succeeded\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sources/{{extraSourceId}}/check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sources",
+                "{{extraSourceId}}",
+                "check"
+              ]
+            },
+            "description": "Tests the source ID stored in extraSourceId. To test GCP/S3/SFTP/HTTPS, copy the corresponding source ID into extraSourceId or change the URL variable."
+          },
+          "response": []
+        },
+        {
+          "name": "List sources",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Sources array exists', () => pm.expect(pm.response.json().sources).to.be.an('array'));",
+                  "console.log('Sources:', JSON.stringify(pm.response.json().sources));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "sources"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete source with wrong workspace (expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Error code is NOT_FOUND\", () => pm.expect(pm.response.json().error).to.eql(\"NOT_FOUND\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"workspace_id\": \"00000000-0000-0000-0000-000000000000\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sources/{{extraSourceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sources",
+                "{{extraSourceId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Sync connections",
+      "item": [
+        {
+          "name": "Create sync connection (cron, selected streams)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"Connection is active\", () => pm.expect(j.status).to.eql(\"active\"));",
+                  "pm.collectionVariables.set(\"connectionId\", j.connection_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_id\": \"{{provisionedSourceId}}\",\n  \"destination_id\": \"{{destinationId}}\",\n  \"name\": \"Faker to Postgres nightly\",\n  \"cron_expression\": \"0 3 * * *\",\n  \"streams\": [\n    { \"name\": \"users\", \"sync_mode\": \"full_refresh\", \"destination_sync_mode\": \"overwrite\" },\n    { \"name\": \"products\", \"sync_mode\": \"full_refresh\", \"destination_sync_mode\": \"overwrite\" }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/connections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "connections"
+              ]
+            },
+            "description": "cron_expression is standard 5-field cron (converted for Airbyte). Omit it for a manual-only connection. Omit 'streams' to sync every stream."
+          },
+          "response": []
+        },
+        {
+          "name": "Trigger manual sync",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"Job started\", () => pm.expect(j.job_id).to.be.a(\"string\"));",
+                  "pm.collectionVariables.set(\"jobId\", j.job_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/connections/{{connectionId}}/sync",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "connections",
+                "{{connectionId}}",
+                "sync"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List sync jobs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "const jobs = pm.response.json().jobs;",
+                  "pm.test(\"Latest job is listed\", () => pm.expect(jobs.length).to.be.above(0));",
+                  "pm.collectionVariables.set(\"lastJobStatus\", jobs[0].status);",
+                  "console.log(\"latest job:\", JSON.stringify(jobs[0]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/connections/{{connectionId}}/jobs?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "connections",
+                "{{connectionId}}",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Run again until status is succeeded. rows_synced and bytes_synced fill in when the job finishes."
+          },
+          "response": []
+        },
+        {
+          "name": "Disable connection",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Now inactive\", () => pm.expect(pm.response.json().status).to.eql(\"inactive\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"status\": \"inactive\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/connections/{{connectionId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "connections",
+                "{{connectionId}}",
+                "status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Enable connection",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Now active\", () => pm.expect(pm.response.json().status).to.eql(\"active\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"status\": \"active\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/connections/{{connectionId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "connections",
+                "{{connectionId}}",
+                "status"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. OAuth (optional, needs an OAuth connector)",
+      "item": [
+        {
+          "name": "Get consent URL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"consent_url returned\", () => pm.expect(pm.response.json().consent_url).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_definition_id\": \"{{oauthSourceDefinitionId}}\",\n  \"redirect_url\": \"{{redirectUrl}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/oauth/consent-url",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "oauth",
+                "consent-url"
+              ]
+            },
+            "description": "Set oauthSourceDefinitionId (a connector that uses OAuth) and redirectUrl in the collection variables first. Open consent_url in a browser."
+          },
+          "response": []
+        },
+        {
+          "name": "Complete OAuth",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"source_id returned\", () => pm.expect(pm.response.json().source_id).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_definition_id\": \"{{oauthSourceDefinitionId}}\",\n  \"redirect_url\": \"{{redirectUrl}}\",\n  \"query_params\": { \"code\": \"PASTE_CODE\", \"state\": \"PASTE_STATE\" },\n  \"source_name\": \"OAuth source\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/oauth/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "oauth",
+                "complete"
+              ]
+            },
+            "description": "Paste the code and state from the callback URL after consent."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Error handling",
+      "item": [
+        {
+          "name": "No token (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Error code is UNAUTHORIZED\", () => pm.expect(pm.response.json().error).to.eql(\"UNAUTHORIZED\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/clients/{{clientId}}/provision",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients",
+                "{{clientId}}",
+                "provision"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Wrong token (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"Error code is UNAUTHORIZED\", () => pm.expect(pm.response.json().error).to.eql(\"UNAUTHORIZED\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Token",
+                "value": "definitely-wrong"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "sources"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Malformed body (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Error code is INVALID_REQUEST\", () => pm.expect(pm.response.json().error).to.eql(\"INVALID_REQUEST\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"db_host\": \"only-this\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/clients/{{clientId}}/provision",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients",
+                "{{clientId}}",
+                "provision"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unknown workspace (expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Error code is NOT_FOUND\", () => pm.expect(pm.response.json().error).to.eql(\"NOT_FOUND\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/00000000-0000-0000-0000-000000000000/sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "00000000-0000-0000-0000-000000000000",
+                "sources"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Jobs limit above 50 (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Error code is INVALID_REQUEST\", () => pm.expect(pm.response.json().error).to.eql(\"INVALID_REQUEST\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/connections/{{connectionId}}/jobs?limit=51",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "connections",
+                "{{connectionId}}",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "51"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. Cleanup",
+      "item": [
+        {
+          "name": "Delete extra source",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Deleted\", () => pm.expect(pm.response.json().status).to.eql(\"deleted\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"workspace_id\": \"{{workspaceId}}\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sources/{{extraSourceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sources",
+                "{{extraSourceId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete client workspace (irreversible)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Deleted\", () => pm.expect(pm.response.json().status).to.eql(\"deleted\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"workspace_id\": \"{{workspaceId}}\" }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/clients/{{clientId}}/provision",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients",
+                "{{clientId}}",
+                "provision"
+              ]
+            },
+            "description": "Removes the workspace and everything in it. Only works when the workspace is named cq_<clientId>_workspace."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-Service-Token",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{serviceToken}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{host}}/airbyte/v1"
+    },
+    {
+      "key": "workspaceId",
+      "value": ""
+    },
+    {
+      "key": "destinationId",
+      "value": ""
+    },
+    {
+      "key": "provisionedSourceId",
+      "value": ""
+    },
+    {
+      "key": "extraSourceId",
+      "value": ""
+    },
+    {
+      "key": "connectionId",
+      "value": ""
+    },
+    {
+      "key": "jobId",
+      "value": ""
+    },
+    {
+      "key": "lastJobStatus",
+      "value": ""
+    },
+    {
+      "key": "fakerDefinitionId",
+      "value": ""
+    },
+    {
+      "key": "oauthSourceDefinitionId",
+      "value": ""
+    },
+    {
+      "key": "redirectUrl",
+      "value": ""
+    },
+    {
+      "key": "gcpSourceId",
+      "value": ""
+    },
+    {
+      "key": "s3SourceId",
+      "value": ""
+    },
+    {
+      "key": "sftpSourceId",
+      "value": ""
+    },
+    {
+      "key": "gcpSourceDefinitionId",
+      "value": ""
+    },
+    {
+      "key": "s3SourceDefinitionId",
+      "value": ""
+    },
+    {
+      "key": "sftpSourceDefinitionId",
+      "value": ""
+    },
+    {
+      "key": "httpsSourceDefinitionId",
+      "value": ""
+    },
+    {
+      "key": "httpsSourceId",
+      "value": ""
+    }
+  ]
+}
